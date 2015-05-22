@@ -32,7 +32,7 @@ class Tpv
     public function __construct()
     {
         $static_config = config('payment');
-        $dinamic_config = unserialize(Config::where('name', '=', 'redsys')->firstOrFail()->data)
+        $dinamic_config = unserialize(Config::where('name', '=', 'redsys')->firstOrFail()->data);
         $options = array_merge($static_config,$dinamic_config);
         return $this->setOption($options);
     }
