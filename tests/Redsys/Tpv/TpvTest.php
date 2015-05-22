@@ -19,6 +19,7 @@ class TpvTest extends \PHPUnit_Framework_TestCase {
 	 * @depends testInstance
 	 */
 	function testAmounts($tpv) {
+		
 		$this->assertEquals('000', $tpv->getAmount(0));
 		$this->assertEquals('000', $tpv->getAmount(null));
 		$this->assertEquals('400', $tpv->getAmount(4));
