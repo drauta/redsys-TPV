@@ -4,6 +4,7 @@ namespace Redsys\Tpv;
 use Exception;
 use DOMDocument, DOMElement;
 use Redsys\Messages\Messages;
+use App\Config;
 
 class Tpv
 {
@@ -32,6 +33,9 @@ class Tpv
     public function __construct()
     {
         $static_config = config('payment');
+        $static_config['UrlOK'] = url($static_config['UrlOK']);
+        $static_config['UrlKO'] = url($static_config['UrlKO']);
+        $static_config['MerchantURL'] = url($static_config['MerchantURL']);
         $dinamic_config = unserialize(Config::where('name', '=', 'redsys')->firstOrFail()->data);
         $options = array_merge($static_config,$dinamic_config);
         return $this->setOption($options);
@@ -273,10 +277,7 @@ class Tpv
         if (empty($amount)) {
             return '000';
         }
-        if (strpos($amount, ',') !== false) {
-            $amount = floatval(str_replace(',', '.', $amount));
-        }
-        return (round($amount, 2) * 100);
+        return round($amount, 2);
     }
 
     public function getSignature()
@@ -301,30 +302,31 @@ class Tpv
         $prefix = 'Ds_';
 
         if (empty($post) || empty($post[$prefix.'Signature'])) {
-            throw new Exception('_POST data is empty');
+            return new Exception('_POST data is empty');
         }
 
         $error = isset($post[$prefix.'ErrorCode']) ? $post[$prefix.'ErrorCode'] : null;
 
         if ($error) {
             if ($message = Messages::getByCode($error)) {
-                throw new Exception(sprintf('TPV returned error code %s: %s', $error, $message['message']));
+	            $message = Messages::getByCode($message['msg']);
+                return new Exception($message['message']);
             } else {
-                throw new Exception(sprintf('TPV returned unknown error code %s', $error));
+                return new Exception(sprintf('TPV returned unknown error code %s', $error));
             }
         }
 
         $response = isset($post[$prefix.'Response']) ? $post[$prefix.'Response'] : null;
 
         if (is_null($response) || (strlen($response) === 0)) {
-            throw new Exception('Response code is empty (no length)');
+            return new Exception('Response code is empty (no length)');
         }
 
         if (((int)$response < 0) || ((int)$response > 99)) {
             if ($message = Messages::getByCode($response)) {
-                throw new Exception(sprintf('Response code is Transaction Denied %s: %s', $response, $message['message']));
+                return new Exception($message['message']);
             } else {
-                throw new Exception(sprintf('Response code is unknown %s', $response));
+                return new Exception(sprintf('Response code is unknown %s', $response));
             }
         }
 
@@ -333,7 +335,7 @@ class Tpv
 
         foreach ($fields as $field) {
             if (empty($post[$prefix.$field])) {
-                throw new Exception(sprintf('Field <strong>%s</strong> is empty and is required to verify transaction'));
+                return new Exception(sprintf('Field <strong>%s</strong> is empty and is required to verify transaction'));
             }
 
             $key .= $post[$prefix.$field];
@@ -342,13 +344,13 @@ class Tpv
         $signature = strtoupper(sha1($key.$this->options['Key']));
 
         if ($signature !== $post[$prefix.'Signature']) {
-            throw new Exception(sprintf('Signature not valid (%s != %s)', $signature, $post[$prefix.'Signature']));
+            return new Exception(sprintf('Signature not valid (%s != %s)', $signature, $post[$prefix.'Signature']));
         }
 
         $response = (int) $post[$prefix.'Response'];
 
         if (($response >= 100) && ($response !== 900)) {
-            throw new Exception(sprintf('Transaction error. Code: <strong>%s</strong>', $post[$prefix.'Response']));
+            return new Exception(sprintf('Transaction error. Code: <strong>%s</strong>', $post[$prefix.'Response']));
         }
 
         return $post[$prefix.'Signature'];
